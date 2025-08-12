@@ -10,6 +10,8 @@ Height: User's height (used for stride and distance calculations).
 
 External Scale Entity: Optional entity picker to link a smart scale for enhanced metrics and calculating BMI.
 
+![KingSmith](./Images/Setup.png)
+
 📊 Features
 The integration provides both direct and complementary sensor data:
 
@@ -32,6 +34,9 @@ Estimated steps (based on height and distance)
 BMI (if external scale is linked)
 
 Session summary statistics
+
+![KingSmith](./Images/Controls.png)
+![KingSmith](./Images/Sensors.png)
 
 🧠 Smart Automation Ideas
 Automatically pause the treadmill when no weight is detected on the scale.
