@@ -1,7 +1,7 @@
 {
   "name": "KingSmith WalkingPad",
   "content_in_root": false,
-  "domain": "KingSmith-WalkingPad",
+  "domain": "Kkingsmith_walkingpad",
   "homeassistant": "2021.6.0",
   "country": "global",
   "render_readme": true
