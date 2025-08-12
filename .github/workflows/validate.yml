@@ -1,23 +1,17 @@
-name: Validate HACS Integration
+name: Validate
 
 on:
-  push:
-    branches: [main]
+  push: 
   pull_request:
-    branches: [main]
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
 
 jobs:
-  validate:
-    runs-on: ubuntu-latest
+  validate-hacs:
+    runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: HACS validation
+        uses: "hacs/action@main"
         with:
-          python-version: '3.11'
-      - name: Install HACS Validator
-        run: |
-          pip install hacs-validator
-      - name: Run HACS Validation
-        run: |
-          hacs validate
+          category: "integration"
