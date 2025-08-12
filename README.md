@@ -45,14 +45,26 @@ Trigger ambient lighting or music when a workout starts.
 
 Log daily walking stats to a dashboard or health tracker.
 
-📦 Installation
-This integration is compatible with HACS. To install:
+## Via HACS (Recommended)
 
-Add this repository to HACS as a custom integration.
+1. In Home Assistant, go to **HACS**.
+2. New custom repository.
+3. Add https://github.com/UrbanTechIO/KingSmith-WalkingPad
+4. Pick Integration.
+5. Install
+6. Restart Home Assistant.
 
-Restart Home Assistant.
+Then, add the integration via:
 
-Configure via the Integrations UI.
+**Settings > Devices & Services > Add Integration > KingSmith WalkingPad**
+
+### Manual Installation
+
+1. Download the contents of this repository.
+2. Copy the `kingsmith_walkingpad` folder into your `custom_components` directory:
+3. Restart Home Assistant.
+4. Go to **Settings > Devices & Services > Add Integration > KingSmith WalkingPad**
+
 
 📄 License
 MIT License. See LICENSE file for details.
