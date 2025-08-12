@@ -1,0 +1,17 @@
+name: Bug Report
+description: File a bug report
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "## Bug Description"
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: Describe the issue clearly.
+  - type: input
+    attributes:
+      label: Integration Version
+  - type: input
+    attributes:
+      label: Home Assistant Version
