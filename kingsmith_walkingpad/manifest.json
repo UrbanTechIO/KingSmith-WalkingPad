@@ -1,0 +1,17 @@
+{
+  "domain": "kingsmith_walkingpad",
+  "name": "KingSmith WalkingPad",
+  "config_flow": true,
+  "documentation": "https://github.com/UrbanTechIO/kingsmith_walkingpad",
+  "issue_tracker": "https://github.com/UrbanTechIO/kingsmith_walkingpad/issues",
+  "requirements": ["bleak>=0.21.0"],
+  "codeowners": ["@UrbanTechIO"],
+  "iot_class": "local_push",
+  "platforms": ["sensor", "media_player", "button"],
+  "bluetooth": [
+    {
+      "service_uuid": "1826"
+    }
+  ],
+  "version": "1.0.0"
+}
