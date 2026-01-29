@@ -5,9 +5,10 @@ from bleak import BleakClient
 from homeassistant.components import bluetooth
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import (
-    UUID_TREADMILL_DATA,
-    UUID_CONTROL_POINT,
-    UUID_TREADMILL_STATUS,
+    # UUID_TREADMILL_DATA,
+    # UUID_CONTROL_POINT,
+    # UUID_TREADMILL_STATUS,
+    MODEL_UUIDS,
     CMD_CONTROL_REQUEST,
     CMD_START,
     CMD_STOP,
@@ -20,20 +21,39 @@ _LOGGER = logging.getLogger(__name__)
 class WalkingPadCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, config):
         super().__init__(hass, _LOGGER, name="WalkingPadCoordinator")
-        self.mac = (config.get("mac_address") or "").upper()
+        self.mac = (config.get("mac_address") or config.get("mac") or "").upper()
         self.device_name = config.get("device_name")
+        # self.model = config.get("model", "unknown")
+        self.model = (config.get("model") or "WalkingPad").strip()
+        self.uuids = MODEL_UUIDS.get(
+            self.model,
+            MODEL_UUIDS["WalkingPad"],
+        )
+        for key in ("data", "control", "status"):
+            if key not in self.uuids:
+                raise ValueError(
+                    f"Missing UUID '{key}' for model '{self.model}'"
+                )
+
         self.client = None
+        self._retry_task = None
         self.data = {
             "speed": 0.0,
             "distance": 0,
             "energy": 0,
             "elapsed_time": 0,
+            "training_status": "unknown",
+            "training_status_raw": None,
+            "countdown_number": None,
         }
         self.control_state = None
         self.control_state_last = None
-        self._retry_task = None
     
+        _LOGGER.info("WalkingPad model detected: %s", self.model)
     
+    @property
+    def is_connected(self):
+        return bool(self.client and self.client.is_connected)
 
     async def async_start(self):
         max_attempts = 3
@@ -76,9 +96,10 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             raise
 
         try:
-            await self.client.start_notify(UUID_TREADMILL_DATA, self._notification_handler)
-            await self.client.start_notify(UUID_CONTROL_POINT, self.handle_response)
-            await self.client.start_notify(UUID_TREADMILL_STATUS, self._training_status_handler)
+            await self.client.start_notify(self.uuids["data"], self._notification_handler)
+            await self.client.start_notify(self.uuids["control"], self.handle_response)
+            await self.client.start_notify(self.uuids["status"], self._training_status_handler)
+
 
             _LOGGER.info("Subscribed to notifications")
         except Exception as exc:
@@ -120,15 +141,18 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         except Exception:
             pass
 
-    @property
-    def is_connected(self):
-        return bool(self.client and self.client.is_connected)
 
     # Control commands (no changes, just cleaned logs)
     async def send_control_request(self):
         if self.is_connected:
             try:
-                await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_CONTROL_REQUEST, response=True)
+                # await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_CONTROL_REQUEST, response=True)
+                await self.client.write_gatt_char(
+                    self.uuids["control"],
+                    CMD_CONTROL_REQUEST,
+                    response=True
+                )
+
             except Exception as e:
                 _LOGGER.debug("Error sending CONTROL REQUEST: %s", e)
         else:
@@ -138,7 +162,7 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         if self.is_connected:
             await self.send_control_request()
             try:
-                await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_START, response=True)
+                await self.client.write_gatt_char(self.uuids["control"], CMD_START, response=True)
             except Exception as e:
                 _LOGGER.debug("Error sending START: %s", e)
         else:
@@ -148,7 +172,13 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         if self.is_connected:
             await self.send_control_request()
             try:
-                await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_STOP, response=True)
+                # await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_STOP, response=True)
+                await self.client.write_gatt_char(
+                    self.uuids["control"],
+                    CMD_STOP,
+                    response=True
+                )
+
             except Exception as e:
                 _LOGGER.debug("Error sending STOP: %s", e)
         else:
@@ -158,7 +188,13 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         if self.is_connected:
             await self.send_control_request()
             try:
-                await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_FINISH, response=True)
+                # await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_FINISH, response=True)
+                await self.client.write_gatt_char(
+                    self.uuids["control"],
+                    CMD_FINISH,
+                    response=True
+                )
+
             except Exception as e:
                 _LOGGER.debug("Error sending FINISH: %s", e)
         else:
@@ -194,6 +230,7 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         _LOGGER.warning(f"Training Status raw data: {hex_data}")
 
         status_str = "unknown"
+        countdown_number = None
 
         if len(data) >= 2:
             # Check for countdown messages

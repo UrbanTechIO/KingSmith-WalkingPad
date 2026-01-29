@@ -51,7 +51,7 @@ class WalkingPadElapsedTimeSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.mac)},
             name=coordinator.device_name,
             manufacturer="KingSmith",
-            model="WalkingPad MC11"
+            model=coordinator.model
         )
 
     @property
@@ -87,7 +87,7 @@ class WalkingPadBmiSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.mac)},
             name=coordinator.device_name,
             manufacturer="KingSmith",
-            model="WalkingPad MC11"
+            model=coordinator.model
         )
         self._state = None
 
@@ -147,7 +147,7 @@ class WalkingPadBmiRatingSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.mac)},
             name=coordinator.device_name,
             manufacturer="KingSmith",
-            model="WalkingPad MC11"
+            model=coordinator.model
         )
         self._state = None
 
@@ -210,7 +210,7 @@ class WalkingPadSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.mac)},
             name=coordinator.device_name,
             manufacturer="KingSmith",
-            model="WalkingPad MC11"
+            model=coordinator.model
         )
 
     @property
@@ -241,7 +241,7 @@ class WalkingPadStepsSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.mac)},
             name=coordinator.device_name,
             manufacturer="KingSmith",
-            model="WalkingPad MC11"
+            model=coordinator.model
         )
 
     @property
@@ -362,7 +362,7 @@ class WalkingPadEnergyAggregateSensor(RestoreEntity, SensorEntity):
             identifiers={(DOMAIN, coordinator.mac)},
             name=coordinator.device_name,
             manufacturer="KingSmith",
-            model="WalkingPad MC11"
+            model=coordinator.model
         )
         self._state = None
 

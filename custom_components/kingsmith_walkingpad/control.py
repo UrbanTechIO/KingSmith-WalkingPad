@@ -38,7 +38,7 @@ class WalkingPadMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             return
         _LOGGER.info("Attempting manual connect to WalkingPad")
         try:
-            await self.coordinator.connect()
+            await self.coordinator.async_connect()
             _LOGGER.info("Manual connect attempt finished")
         except Exception as e:
             _LOGGER.error("Manual connect failed: %s", e)
@@ -52,7 +52,7 @@ class WalkingPadMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             identifiers={(DOMAIN, coordinator.mac)},
             name=coordinator.device_name,
             manufacturer="KingSmith",
-            model="WalkingPad MC11",
+            model=coordinator.model,
         )
         self._state = MediaPlayerState.IDLE
 

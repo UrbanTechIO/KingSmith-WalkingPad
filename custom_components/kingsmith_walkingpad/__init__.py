@@ -16,7 +16,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     async def _start_callback(_):
-        _LOGGER.info("WalkingPad: Starting coordinator connection attempts")
+        _LOGGER.info("WalkingPad: starting BLE connection")
         await coordinator.async_start()
 
     # Wait until HA fully started to start connection attempts
