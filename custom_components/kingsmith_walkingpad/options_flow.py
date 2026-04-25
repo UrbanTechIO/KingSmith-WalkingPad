@@ -14,9 +14,9 @@ class WalkingPadOptionsFlowHandler(config_entries.OptionsFlow):
         # Show form to pick weight entity (optional)
         schema = vol.Schema({
             vol.Optional(CONF_WEIGHT_ENTITY, default=self.config_entry.options.get(CONF_WEIGHT_ENTITY, "")): selector.EntitySelector(
-                selector_type="entity",
-                domain="sensor",
-                include_disabled=False,
+                selector.EntitySelectorConfig(
+                    domain=["sensor"],
+                )
             )
         })
         return self.async_show_form(step_id="init", data_schema=schema)

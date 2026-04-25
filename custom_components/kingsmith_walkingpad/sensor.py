@@ -1,5 +1,4 @@
 import math
-from datetime import datetime
 from homeassistant.components.sensor import SensorEntity, RestoreEntity
 from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
@@ -157,7 +156,12 @@ class WalkingPadBmiRatingSensor(SensorEntity):
 
     async def async_added_to_hass(self):
         self.coordinator.async_add_listener(self._handle_update)
-        self.hass.bus.async_listen("state_changed", self._handle_update_event)
+        # self.hass.bus.async_listen("state_changed", self._handle_update_event)
+        async_track_state_change_event(
+            self.hass,
+            [self.bmi_sensor.entity_id],
+            lambda event: self._update_rating() or self.async_write_ha_state()
+        )
         self._update_rating()
         self.async_write_ha_state()
 
@@ -166,11 +170,11 @@ class WalkingPadBmiRatingSensor(SensorEntity):
         self._update_rating()
         self.async_write_ha_state()
 
-    @callback
-    def _handle_update_event(self, event):
-        if event.data.get("entity_id") == self.bmi_sensor.entity_id:
-            self._update_rating()
-            self.async_write_ha_state()
+    # @callback
+    # def _handle_update_event(self, event):
+    #     if event.data.get("entity_id") == self.bmi_sensor.entity_id:
+    #         self._update_rating()
+    #         self.async_write_ha_state()
 
     def _update_rating(self):
         bmi = self.bmi_sensor.native_value

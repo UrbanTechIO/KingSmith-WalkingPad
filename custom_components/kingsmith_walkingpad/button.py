@@ -21,7 +21,7 @@ class WalkingPadConnectButton(CoordinatorEntity, ButtonEntity):
             identifiers={(DOMAIN, coordinator.mac)},
             name=coordinator.device_name,
             manufacturer="KingSmith",
-            model="WalkingPad MC11"
+            model=coordinator.model
         )
 
     async def async_press(self):

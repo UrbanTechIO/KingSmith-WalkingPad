@@ -7,7 +7,7 @@ from .coordinator import WalkingPadCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["sensor", "media_player", "button"]
+PLATFORMS = ["sensor", "media_player", "button", "binary_sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     _LOGGER.info("WalkingPad: async_setup_entry called for %s", entry.data)

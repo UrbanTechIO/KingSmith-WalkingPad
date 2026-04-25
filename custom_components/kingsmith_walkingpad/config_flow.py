@@ -1,6 +1,5 @@
 import logging
 import voluptuous as vol
-import homeassistant
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 from .const import DOMAIN, CONF_DEVICE_NAME, CONF_MAC, CONF_HEIGHT, CONF_WEIGHT_ENTITY
@@ -9,8 +8,8 @@ from .options_flow import WalkingPadOptionsFlowHandler
 
 _LOGGER = logging.getLogger(__name__)
 
-import inspect
-_LOGGER.debug(f"EntitySelector __init__ signature: {inspect.signature(selector.EntitySelector.__init__)}")
+# import inspect
+# _LOGGER.debug(f"EntitySelector __init__ signature: {inspect.signature(selector.EntitySelector.__init__)}")
 
 SUPPORTED_NAME_PREFIXES = (
     "KS-AP",     # MC11
@@ -80,19 +79,6 @@ class WalkingPadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         return await self.async_step_manual()
 
-        # # Fallback — no devices found, ask for full details
-        # schema = vol.Schema({
-        #     vol.Required(CONF_DEVICE_NAME): str,
-        #     vol.Required(CONF_MAC): str,
-        #     vol.Required(CONF_HEIGHT): vol.All(vol.Coerce(float), vol.Range(min=50, max=250)),
-        #     vol.Optional(CONF_WEIGHT_ENTITY): selector.EntitySelector(
-        #         selector.EntitySelectorConfig(
-        #             domain=["sensor"],
-        #             device_class="weight"
-        #         )
-        #     ),
-        # })
-        # return self.async_show_form(step_id="manual", data_schema=schema, errors=errors)
 
     async def async_step_confirm_name(self, user_input=None):
         """Step where user confirms/fills device name after auto-discovery."""
@@ -103,7 +89,7 @@ class WalkingPadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DEVICE_NAME: user_input[CONF_DEVICE_NAME],
                     CONF_MAC: self.context["detected_mac"],
                     "model": self.context.get("detected_model", "unknown"),
-                    CONF_HEIGHT: user_input[CONF_HEIGHT],
+                    CONF_HEIGHT: user_input.get(CONF_HEIGHT),
                     CONF_WEIGHT_ENTITY: user_input.get(CONF_WEIGHT_ENTITY)
                 }
             )
@@ -153,5 +139,6 @@ class WalkingPadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-    def async_get_options_flow(self):
-        return WalkingPadOptionsFlowHandler(self.config_entry)
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        return WalkingPadOptionsFlowHandler(config_entry)

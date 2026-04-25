@@ -88,7 +88,7 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             if not ble_device:
                 raise RuntimeError(f"BLE device {self.mac} not found by HA Bluetooth stack")
 
-            self.client = BleakClient(ble_device)
+            self.client = BleakClient(ble_device, disconnected_callback=self._on_disconnected)
             await self.client.connect()
         except Exception as exc:
             self.client = None
@@ -99,14 +99,18 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             await self.client.start_notify(self.uuids["data"], self._notification_handler)
             await self.client.start_notify(self.uuids["control"], self.handle_response)
             await self.client.start_notify(self.uuids["status"], self._training_status_handler)
-
-
             _LOGGER.info("Subscribed to notifications")
         except Exception as exc:
             _LOGGER.error("Failed to subscribe to notifications: %s", exc)
 
+    # async def async_stop(self):
+    #     """Disconnect BLE client."""
+    #     await self.disconnect()
     async def async_stop(self):
-        """Disconnect BLE client."""
+        """Disconnect BLE client and cancel retry loop."""
+        if self._retry_task and not self._retry_task.done():
+            self._retry_task.cancel()
+            self._retry_task = None
         await self.disconnect()
 
     async def disconnect(self):
@@ -117,6 +121,13 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             except Exception as exc:
                 _LOGGER.debug("Error during disconnect: %s", exc)
         self.client = None
+    
+    def _on_disconnected(self, client):
+        """Called by Bleak when the BLE connection drops unexpectedly."""
+        _LOGGER.warning("WalkingPad disconnected unexpectedly, scheduling retry")
+        self.client = None
+        if not self._retry_task or self._retry_task.done():
+            self._retry_task = self.hass.loop.create_task(self._retry_loop())
 
     def _notification_handler(self, sender, data: bytearray):
         """Parse treadmill data notifications."""
@@ -227,7 +238,7 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
     
     def _training_status_handler(self, sender, data: bytearray):
         hex_data = " ".join(f"{b:02X}" for b in data)
-        _LOGGER.warning(f"Training Status raw data: {hex_data}")
+        _LOGGER.debug("Training Status raw data: %s", hex_data)
 
         status_str = "unknown"
         countdown_number = None
@@ -255,7 +266,7 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             elif data[0] == 0x01 and data[1] == 0x01:
                 status_str = "idle"
 
-        _LOGGER.warning(f"Training Status update: {status_str}")
+        _LOGGER.debug("Training Status update: %s", status_str)
 
         self.data["training_status_raw"] = status_str
         self.data["countdown_number"] = countdown_number
