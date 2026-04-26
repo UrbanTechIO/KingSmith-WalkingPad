@@ -23,8 +23,6 @@ class WalkingPadSpeedNumber(NumberEntity):
     _attr_name = "WalkingPad Speed Control"
     _attr_unique_id_suffix = "_speed_control"
     _attr_icon = "mdi:speedometer"
-    _attr_native_min_value = SPEED_MIN
-    _attr_native_max_value = SPEED_MAX
     _attr_native_step = SPEED_STEP
     _attr_native_unit_of_measurement = "km/h"
     _attr_mode = NumberMode.SLIDER   # renders as a slider with the actual km/h values shown
@@ -40,11 +38,20 @@ class WalkingPadSpeedNumber(NumberEntity):
         )
 
     @property
+    def native_min_value(self) -> float:
+        """Return min speed for this model."""""
+        return self.coordinator.speed_min
+
+    @property
+    def native_max_value(self) -> float:
+        """Return max speed for this model."""""
+        return self.coordinator.speed_max
+
+    @property
     def native_value(self) -> float:
-        """Return current speed from treadmill BLE data."""
-        speed = self.coordinator.data.get("speed", SPEED_MIN)
-        # Clamp to valid range in case of a 0.0 reading while idle
-        return max(SPEED_MIN, min(SPEED_MAX, speed))
+        """Return current speed from treadmill BLE data."""""
+        speed = self.coordinator.data.get("speed", self.coordinator.speed_min)
+        return max(self.coordinator.speed_min, min(self.coordinator.speed_max, speed))
 
     @property
     def available(self) -> bool:

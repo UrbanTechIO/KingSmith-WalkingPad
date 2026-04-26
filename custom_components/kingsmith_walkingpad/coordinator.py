@@ -2,7 +2,14 @@
 import asyncio
 import logging
 from bleak import BleakClient
+from bleak.backends.device import BLEDevice
 from homeassistant.components import bluetooth
+from homeassistant.components.bluetooth import async_ble_device_from_address
+try:
+    from bleak_retry_connector import establish_connection
+    _HAS_RETRY_CONNECTOR = True
+except ImportError:
+    _HAS_RETRY_CONNECTOR = False
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import (
     # UUID_TREADMILL_DATA,
@@ -31,10 +38,11 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         self.device_name = config.get("device_name")
         # self.model = config.get("model", "unknown")
         self.model = (config.get("model") or "WalkingPad").strip()
-        self.uuids = MODEL_UUIDS.get(
-            self.model,
-            MODEL_UUIDS["WalkingPad"],
-        )
+        model_config = MODEL_UUIDS.get(self.model, MODEL_UUIDS["WalkingPad"])
+        self.uuids = model_config
+        # Per-model speed limits — used by send_set_speed and the number entity
+        self.speed_min: float = model_config.get("speed_min", SPEED_MIN)
+        self.speed_max: float = model_config.get("speed_max", SPEED_MAX)
         for key in ("data", "control", "status"):
             if key not in self.uuids:
                 raise ValueError(
@@ -97,21 +105,38 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
 
 
     async def async_connect(self):
-        """Establish BLE connection and subscribe to notifications."""
+        """Establish BLE connection and subscribe to notifications.
+        Uses bleak_retry_connector.establish_connection() when available,
+        which is HA's recommended approach for reliable BLE connections.
+        Falls back to raw BleakClient.connect() if not available.
+        """
         if self.is_connected:
             _LOGGER.info("Already connected to WalkingPad")
             return
 
         _LOGGER.debug("Connecting to WalkingPad at %s", self.mac)
         try:
-            ble_device = bluetooth.async_ble_device_from_address(
+            ble_device = async_ble_device_from_address(
                 self.hass, self.mac, connectable=True
             )
             if not ble_device:
                 raise RuntimeError(f"BLE device {self.mac} not found by HA Bluetooth stack")
 
-            self.client = BleakClient(ble_device, disconnected_callback=self._on_disconnected)
-            await self.client.connect()
+            if _HAS_RETRY_CONNECTOR:
+                # Preferred path — handles retries, stale connections, concurrent attempts
+                _LOGGER.debug("Using bleak_retry_connector for reliable connection")
+                self.client = await establish_connection(
+                    BleakClient,
+                    ble_device,
+                    self.mac,
+                    disconnected_callback=self._on_disconnected,
+                )
+            else:
+                # Fallback — raw Bleak (works but less reliable on marginal BLE environments)
+                _LOGGER.debug("bleak_retry_connector not available, using raw BleakClient")
+                self.client = BleakClient(ble_device, disconnected_callback=self._on_disconnected)
+                await self.client.connect()
+
         except Exception as exc:
             self.client = None
             _LOGGER.error("Failed to connect to device: %s", exc)
@@ -247,7 +272,7 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             _LOGGER.warning("Cannot set speed: treadmill is not actively playing")
             return
         # Clamp and round to 0.1 resolution
-        kmh = round(max(SPEED_MIN, min(SPEED_MAX, kmh)), 1)
+        kmh = round(max(self.speed_min, min(self.speed_max, kmh)), 1)
         await self.send_control_request()
         try:
             await self.client.write_gatt_char(

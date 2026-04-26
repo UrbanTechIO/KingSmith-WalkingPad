@@ -5,7 +5,8 @@
   "documentation": "https://github.com/UrbanTechIO/kingsmith_walkingpad",
   "issue_tracker": "https://github.com/UrbanTechIO/kingsmith_walkingpad/issues",
   "requirements": [
-    "bleak>=0.21.0"
+    "bleak>=0.21.0",
+    "bleak-retry-connector>=3.0.0"
   ],
   "codeowners": [
     "@UrbanTechIO"

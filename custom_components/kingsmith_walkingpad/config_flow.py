@@ -14,12 +14,15 @@ _LOGGER = logging.getLogger(__name__)
 SUPPORTED_NAME_PREFIXES = (
     "KS-AP",     # MC11
     "KS-C2",     # C2
-    "KS-",       # future Kingsmith
+    "KS-MC21",   # MC21
+    "KS-",       # future KingSmith models
     "WalkingPad"
 )
 
 def normalize_model(ble_name: str) -> str:
-    """Normalize BLE name into a stable WalkingPad model."""
+    """Normalize BLE name into a stable WalkingPad model string.
+    Order matters — more specific prefixes must come before generic ones.
+    """
     if not ble_name:
         return "WalkingPad"
 
@@ -27,6 +30,8 @@ def normalize_model(ble_name: str) -> str:
         return "WalkingPad C2"
     if ble_name.startswith("KS-AP"):
         return "WalkingPad MC11"
+    if ble_name.startswith("KS-MC21"):
+        return "WalkingPad MC21"
     if ble_name.startswith("KS-"):
         return "WalkingPad"
 

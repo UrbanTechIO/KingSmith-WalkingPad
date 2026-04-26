@@ -14,17 +14,30 @@ MODEL_UUIDS = {
         "data": UUID_TREADMILL_DATA,
         "control": UUID_CONTROL_POINT,
         "status": UUID_TREADMILL_STATUS,
+        "speed_min": 1.0,
+        "speed_max": 12.0,
     },
     "WalkingPad C2": {
         "data": UUID_TREADMILL_DATA,
         "control": UUID_CONTROL_POINT,
         "status": UUID_TREADMILL_STATUS,
+        "speed_min": 1.0,
+        "speed_max": 6.0,
+    },
+    "WalkingPad MC21": {
+        "data": UUID_TREADMILL_DATA,
+        "control": UUID_CONTROL_POINT,
+        "status": UUID_TREADMILL_STATUS,
+        "speed_min": 1.0,
+        "speed_max": 10.0,
     },
     # Fallback for unknown / future models
     "WalkingPad": {
         "data": UUID_TREADMILL_DATA,
         "control": UUID_CONTROL_POINT,
         "status": UUID_TREADMILL_STATUS,
+        "speed_min": 1.0,
+        "speed_max": 10.0,
     },
 }
 
