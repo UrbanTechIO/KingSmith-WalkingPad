@@ -102,3 +102,4 @@ class WalkingPadMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         await self.coordinator.send_finish()
         self._state = MediaPlayerState.IDLE
         self.async_write_ha_state()
+

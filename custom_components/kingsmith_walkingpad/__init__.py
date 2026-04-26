@@ -7,13 +7,16 @@ from .coordinator import WalkingPadCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["sensor", "media_player", "button", "binary_sensor"]
+PLATFORMS = ["sensor", "media_player", "button", "binary_sensor", "switch", "number"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     _LOGGER.info("WalkingPad: async_setup_entry called for %s", entry.data)
     coordinator = WalkingPadCoordinator(hass, entry.data)
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    # Load watch entity config from options immediately
+    coordinator.load_watch_entities(entry.options)
 
     async def _start_callback(_):
         _LOGGER.info("WalkingPad: starting BLE connection")

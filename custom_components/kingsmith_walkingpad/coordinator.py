@@ -13,6 +13,12 @@ from .const import (
     CMD_START,
     CMD_STOP,
     CMD_FINISH,
+    CONF_WATCH_HR_ENTITY,
+    CONF_WATCH_STEPS_ENTITY,
+    CONF_WATCH_CALORIES_ENTITY,
+    cmd_set_speed,
+    SPEED_MIN,
+    SPEED_MAX,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,10 +51,26 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             "training_status": "unknown",
             "training_status_raw": None,
             "countdown_number": None,
+            # Watch session data (populated when use_watch=True)
+            "watch_session_steps": 0,
+            "watch_session_calories": 0,
+            "watch_heart_rate": None,
         }
         self.control_state = None
         self.control_state_last = None
-    
+
+        # Watch integration — entity IDs loaded from options on setup
+        self.watch_hr_entity: str | None = None
+        self.watch_steps_entity: str | None = None
+        self.watch_calories_entity: str | None = None
+
+        # Runtime toggle — controlled by the switch entity
+        self.use_watch: bool = False
+
+        # Snapshot values captured at session start for delta calculation
+        self._watch_steps_snapshot: float | None = None
+        self._watch_calories_snapshot: float | None = None
+
         _LOGGER.info("WalkingPad model detected: %s", self.model)
     
     @property
@@ -147,6 +169,8 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             "energy": energy,
             "elapsed_time": elapsed,
         })
+        # Refresh watch data on every treadmill notification
+        self.update_watch_data()
         try:
             self.async_set_updated_data(self.data)
         except Exception:
@@ -211,6 +235,30 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         else:
             _LOGGER.debug("Cannot send FINISH, client not connected")
 
+    async def send_set_speed(self, kmh: float) -> None:
+        """Set treadmill belt speed while running.
+        Clamps to SPEED_MIN–SPEED_MAX and rounds to 0.1 km/h resolution.
+        Only sends if treadmill is actively playing.
+        """
+        if not self.is_connected:
+            _LOGGER.warning("Cannot set speed: device not connected")
+            return
+        if self.data.get("training_status") != "playing":
+            _LOGGER.warning("Cannot set speed: treadmill is not actively playing")
+            return
+        # Clamp and round to 0.1 resolution
+        kmh = round(max(SPEED_MIN, min(SPEED_MAX, kmh)), 1)
+        await self.send_control_request()
+        try:
+            await self.client.write_gatt_char(
+                self.uuids["control"],
+                cmd_set_speed(kmh),
+                response=True,
+            )
+            _LOGGER.debug("Speed set to %.1f km/h", kmh)
+        except Exception as exc:
+            _LOGGER.error("Failed to set speed: %s", exc)
+
     def handle_response(self, sender, data):
         """Parse control point responses and update state."""
         _LOGGER.debug("Control point response: %s", " ".join(f"{b:02X}" for b in data))
@@ -270,6 +318,10 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
 
         self.data["training_status_raw"] = status_str
         self.data["countdown_number"] = countdown_number
+
+        # Determine previous status before overwriting
+        prev_status = self.data.get("training_status")
+
         # Normalize status for other components
         if "countdown" in status_str:
             self.data["training_status"] = "countdown"
@@ -282,12 +334,93 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         else:
             self.data["training_status"] = "unknown"
 
+        new_status = self.data["training_status"]
+
+        # Watch session lifecycle — snapshot on first "playing", reset on "idle"
+        if self.use_watch:
+            if new_status == "playing" and prev_status != "playing":
+                self.start_watch_session()
+            elif new_status == "idle" and prev_status not in ("idle", "unknown"):
+                self.reset_watch_session()
+            self.update_watch_data()
+
         try:
             self.async_set_updated_data(self.data)
         except Exception:
             pass
 
     
+    # ------------------------------------------------------------------
+    # Watch integration helpers
+    # ------------------------------------------------------------------
+
+    def load_watch_entities(self, options: dict) -> None:
+        """Load watch entity IDs from config entry options. Called on setup and reload."""
+        from .const import CONF_WATCH_HR_ENTITY, CONF_WATCH_STEPS_ENTITY, CONF_WATCH_CALORIES_ENTITY
+        self.watch_hr_entity = options.get(CONF_WATCH_HR_ENTITY)
+        self.watch_steps_entity = options.get(CONF_WATCH_STEPS_ENTITY)
+        self.watch_calories_entity = options.get(CONF_WATCH_CALORIES_ENTITY)
+        _LOGGER.debug(
+            "Watch entities loaded — HR: %s  Steps: %s  Calories: %s",
+            self.watch_hr_entity, self.watch_steps_entity, self.watch_calories_entity,
+        )
+
+    def _get_watch_value(self, entity_id: str | None) -> float | None:
+        """Read a numeric state from a HA entity. Returns None if unavailable."""
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if not state or state.state in (None, "unknown", "unavailable"):
+            return None
+        try:
+            return float(state.state)
+        except (ValueError, TypeError):
+            return None
+
+    def start_watch_session(self) -> None:
+        """Snapshot watch cumulative values at the start of a session.
+        The session sensors will show (current - snapshot), starting from 0.
+        """
+        self._watch_steps_snapshot = self._get_watch_value(self.watch_steps_entity)
+        self._watch_calories_snapshot = self._get_watch_value(self.watch_calories_entity)
+        # Reset session counters in data dict
+        self.data["watch_session_steps"] = 0
+        self.data["watch_session_calories"] = 0
+        _LOGGER.info(
+            "Watch session started — steps snapshot: %s  calories snapshot: %s",
+            self._watch_steps_snapshot, self._watch_calories_snapshot,
+        )
+
+    def reset_watch_session(self) -> None:
+        """Clear snapshot when session ends, ready for next session."""
+        self._watch_steps_snapshot = None
+        self._watch_calories_snapshot = None
+        self.data["watch_session_steps"] = 0
+        self.data["watch_session_calories"] = 0
+        _LOGGER.debug("Watch session reset")
+
+    def update_watch_data(self) -> None:
+        """Pull latest watch values and compute session deltas.
+        Called from _notification_handler and _training_status_handler when use_watch=True.
+        """
+        if not self.use_watch:
+            return
+
+        # Heart rate — always live passthrough, no delta needed
+        self.data["watch_heart_rate"] = self._get_watch_value(self.watch_hr_entity)
+
+        # Steps session delta
+        current_steps = self._get_watch_value(self.watch_steps_entity)
+        if current_steps is not None and self._watch_steps_snapshot is not None:
+            delta = current_steps - self._watch_steps_snapshot
+            self.data["watch_session_steps"] = max(0, delta)
+
+        # Calories session delta
+        current_calories = self._get_watch_value(self.watch_calories_entity)
+        if current_calories is not None and self._watch_calories_snapshot is not None:
+            delta = current_calories - self._watch_calories_snapshot
+            self.data["watch_session_calories"] = max(0, delta)
+
     async def _retry_loop(self):
         """Background loop to retry connection until successful."""
         while not self.is_connected:

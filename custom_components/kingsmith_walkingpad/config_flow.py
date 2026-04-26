@@ -141,4 +141,5 @@ class WalkingPadConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry):
-        return WalkingPadOptionsFlowHandler(config_entry)
+        # HA 2024.x+ injects config_entry automatically — no need to pass it
+        return WalkingPadOptionsFlowHandler()

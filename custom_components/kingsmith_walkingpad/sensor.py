@@ -4,7 +4,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 
-from .const import DOMAIN, CONF_HEIGHT, CONF_WEIGHT_ENTITY
+from .const import DOMAIN, CONF_HEIGHT, CONF_WEIGHT_ENTITY, CONF_WATCH_HR_ENTITY
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
@@ -18,7 +18,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     sensors = [
         WalkingPadSensor(coordinator, "speed", "Speed", "km/h", "mdi:run"),
         WalkingPadSensor(coordinator, "distance", "Distance", "m", "mdi:map-marker-distance"),
-        WalkingPadSensor(coordinator, "energy", "Energy", "kcal", "mdi:fire"),  # raw energy from device
+        WalkingPadEnergySensor(coordinator, "energy", "Energy", "kcal", "mdi:fire"),
         WalkingPadStepsSensor(coordinator, "steps", "Steps", "steps"),
         WalkingPadEnergyAggregateSensor(coordinator, tracker, "daily", "Daily Energy"),
         WalkingPadEnergyAggregateSensor(coordinator, tracker, "weekly", "Weekly Energy"),
@@ -31,6 +31,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
         sensors.append(WalkingPadBmiRatingSensor(coordinator, bmi_sensor))
 
     sensors.append(WalkingPadElapsedTimeSensor(coordinator))
+
+    # Heart rate sensor — only created when a watch HR entity is configured
+    watch_hr_entity_id = entry.options.get(CONF_WATCH_HR_ENTITY) or entry.data.get(CONF_WATCH_HR_ENTITY)
+    if watch_hr_entity_id:
+        sensors.append(WalkingPadHeartRateSensor(coordinator, watch_hr_entity_id))
+
     async_add_entities(sensors)
 
 
@@ -250,6 +256,10 @@ class WalkingPadStepsSensor(SensorEntity):
 
     @property
     def native_value(self):
+        # When watch mode is active, return session delta from watch
+        if self.coordinator.use_watch and self.coordinator.watch_steps_entity:
+            return int(self.coordinator.data.get("watch_session_steps", 0))
+        # Default: calculate from treadmill distance
         distance_m = self.coordinator.data.get("distance", 0)
         if distance_m is None:
             return None
@@ -389,4 +399,71 @@ class WalkingPadEnergyAggregateSensor(RestoreEntity, SensorEntity):
     def _handle_update(self):
         energy = self.coordinator.data.get("energy")
         self.tracker.add_energy(energy)
+        self.async_write_ha_state()
+
+
+class WalkingPadEnergySensor(WalkingPadSensor):
+    """Energy sensor that switches source between treadmill BLE and watch when use_watch is on."""
+
+    @property
+    def native_value(self):
+        # When watch mode is active, return session delta from watch
+        if self.coordinator.use_watch and self.coordinator.watch_calories_entity:
+            return round(self.coordinator.data.get("watch_session_calories", 0), 1)
+        # Default: raw energy from treadmill BLE
+        return self.coordinator.data.get(self._key)
+
+
+class WalkingPadHeartRateSensor(SensorEntity):
+    """Live heart rate from a linked watch entity. Only created when HR entity is configured."""
+
+    def __init__(self, coordinator, hr_entity_id: str):
+        self.coordinator = coordinator
+        self.hass = coordinator.hass
+        self._hr_entity_id = hr_entity_id
+        self._attr_name = "WalkingPad Heart Rate"
+        self._attr_unique_id = f"{coordinator.mac}_heart_rate"
+        self._attr_native_unit_of_measurement = "bpm"
+        self._attr_icon = "mdi:heart-pulse"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.mac)},
+            name=coordinator.device_name,
+            manufacturer="KingSmith",
+            model=coordinator.model,
+        )
+        self._state = None
+
+    @property
+    def native_value(self):
+        return self._state
+
+    def _refresh(self):
+        state = self.hass.states.get(self._hr_entity_id)
+        if not state or state.state in (None, "unknown", "unavailable"):
+            self._state = None
+            return
+        try:
+            self._state = int(float(state.state))
+        except (ValueError, TypeError):
+            self._state = None
+
+    async def async_added_to_hass(self):
+        # Update when coordinator pushes data AND when the HR entity itself changes
+        self.coordinator.async_add_listener(self._handle_coordinator_update)
+        async_track_state_change_event(
+            self.hass,
+            [self._hr_entity_id],
+            self._handle_hr_update,
+        )
+        self._refresh()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_coordinator_update(self):
+        self._refresh()
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_hr_update(self, event):
+        self._refresh()
         self.async_write_ha_state()
