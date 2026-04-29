@@ -310,6 +310,12 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             pass
     
     def _training_status_handler(self, sender, data: bytearray):
+        """Handle training status notifications.
+
+        MC11 uses UUID 2AD3 (Training Status) with proprietary byte format.
+        MC21 uses UUID 2ADA (Fitness Machine Status) with FTMS standard format.
+        Both are routed here — we detect which format based on b[0].
+        """
         hex_data = " ".join(f"{b:02X}" for b in data)
         _LOGGER.debug("Training Status raw data: %s", hex_data)
 
@@ -317,9 +323,26 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         countdown_number = None
 
         if len(data) >= 2:
+            # ---- MC21 / FTMS Fitness Machine Status (2ADA) format ----
+            # b[0]=0x04 → Playing
+            # b[0]=0x02, b[1]=0x02 → Paused
+            # b[0]=0x02, b[1]=0x01 → Stopped/Idle
+            # b[0]=0x05 → Speed update notification (not a state change)
+            if data[0] == 0x04:
+                status_str = "playing"
+            elif data[0] == 0x02 and data[1] == 0x02:
+                status_str = "stopping/paused"
+            elif data[0] == 0x02 and data[1] == 0x01:
+                status_str = "idle"
+            elif data[0] == 0x05:
+                # Speed notification from MC21 — not a state change, ignore for status
+                # Speed is already read from the 2ACD Treadmill Data notifications
+                _LOGGER.debug("MC21 speed notification: %s (handled by data handler)", hex_data)
+                return
+
+            # ---- MC11 / Proprietary Training Status (2AD3) format ----
             # Check for countdown messages
-            if data[0] == 0x03 and len(data) >= 3 and data[1] == 0x0E:
-                # Map second byte to countdown number
+            elif data[0] == 0x03 and len(data) >= 3 and data[1] == 0x0E:
                 countdown_map = {
                     0x33: "countdown 3",
                     0x32: "countdown 2",
@@ -327,7 +350,6 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
                 }
                 status_str = countdown_map.get(data[2], f"mode unknown ({data[2]:02X})")
                 if status_str.startswith("countdown"):
-                    # Extract the countdown number from the string, e.g. "countdown 3" -> 3
                     countdown_number = int(status_str.split()[1])
             # Playing
             elif data[0] == 0x01 and data[1] == 0x0D:
@@ -338,6 +360,11 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             # Idle
             elif data[0] == 0x01 and data[1] == 0x01:
                 status_str = "idle"
+            else:
+                _LOGGER.debug(
+                    "Unrecognised status bytes: %s — treating as unknown. "
+                    "Please report this for model support.", hex_data
+                )
 
         _LOGGER.debug("Training Status update: %s", status_str)
 

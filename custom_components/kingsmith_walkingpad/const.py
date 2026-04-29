@@ -6,7 +6,8 @@ CONF_MAC = "mac_address"
 # BLE UUIDs
 UUID_TREADMILL_DATA = "00002acd-0000-1000-8000-00805f9b34fb"
 UUID_CONTROL_POINT = "00002ad9-0000-1000-8000-00805f9b34fb"
-UUID_TREADMILL_STATUS = "00002ad3-0000-1000-8000-00805f9b34fb"
+UUID_TREADMILL_STATUS = "00002ad3-0000-1000-8000-00805f9b34fb"  # MC11 Training Status
+UUID_FITNESS_MACHINE_STATUS = "00002ada-0000-1000-8000-00805f9b34fb"  # MC21 Fitness Machine Status
 # UUID_TREADMILL_STATUS = "00002ACC-0000-1000-8000-00805f9b34fb"
 
 MODEL_UUIDS = {
@@ -27,9 +28,9 @@ MODEL_UUIDS = {
     "WalkingPad MC21": {
         "data": UUID_TREADMILL_DATA,
         "control": UUID_CONTROL_POINT,
-        "status": UUID_TREADMILL_STATUS,
-        "speed_min": 1.0,
-        "speed_max": 10.0,
+        "status": UUID_FITNESS_MACHINE_STATUS,  # MC21 uses 2ADA not 2AD3
+        "speed_min": 0.5,   # confirmed from 2AD4 Supported Speed Range
+        "speed_max": 10.0,  # confirmed from 2AD4 Supported Speed Range
     },
     # Fallback for unknown / future models
     "WalkingPad": {
