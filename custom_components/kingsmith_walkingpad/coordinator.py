@@ -26,6 +26,8 @@ from .const import (
     cmd_set_speed,
     SPEED_MIN,
     SPEED_MAX,
+    CMD_MC21_START,
+    CMD_MC21_STOP,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,6 +86,11 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
     @property
     def is_connected(self):
         return bool(self.client and self.client.is_connected)
+
+    @property
+    def is_mc21(self) -> bool:
+        """True for MC21 — skips Request Control before all commands."""
+        return self.model == "WalkingPad MC21"
 
     async def async_start(self):
         max_attempts = 3
@@ -181,9 +188,22 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Received treadmill data notification")
         try:
             speed_raw = int.from_bytes(data[2:4], byteorder="little") / 100
-            distance = int.from_bytes(data[4:7], byteorder="little")
-            energy = data[7]
-            elapsed = int.from_bytes(data[12:14], byteorder="little")
+
+            # MC11 sends 17-byte packets (distance = 3 bytes at b[4:7])
+            # MC21 sends 14-byte packets (distance = 2 bytes at b[4:6])
+            if len(data) >= 17:
+                # MC11 format
+                distance = int.from_bytes(data[4:7], byteorder="little")
+                energy   = data[7]
+                elapsed  = int.from_bytes(data[12:14], byteorder="little")
+            elif len(data) >= 14:
+                # MC21 format
+                distance = int.from_bytes(data[4:6], byteorder="little")
+                energy   = data[7]
+                elapsed  = int.from_bytes(data[12:14], byteorder="little")
+            else:
+                _LOGGER.debug("Short data packet (%d bytes), skipping", len(data))
+                return
         except Exception as exc:
             _LOGGER.debug("Failed parsing treadmill notification: %s", exc)
             return
@@ -204,6 +224,9 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
 
     # Control commands (no changes, just cleaned logs)
     async def send_control_request(self):
+        """MC11 only — MC21 does not need this before any command."""
+        if self.is_mc21:
+            return
         if self.is_connected:
             try:
                 # await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_CONTROL_REQUEST, response=True)
@@ -212,53 +235,52 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
                     CMD_CONTROL_REQUEST,
                     response=True
                 )
-
             except Exception as e:
                 _LOGGER.debug("Error sending CONTROL REQUEST: %s", e)
         else:
             _LOGGER.debug("Cannot send CONTROL REQUEST, client not connected")
 
     async def send_start(self):
-        if self.is_connected:
-            await self.send_control_request()
-            try:
-                await self.client.write_gatt_char(self.uuids["control"], CMD_START, response=True)
-            except Exception as e:
-                _LOGGER.debug("Error sending START: %s", e)
-        else:
+        """Start the treadmill. MC21: [0x07] direct. MC11: Request Control + [0x07,0x01]."""
+        if not self.is_connected:
             _LOGGER.debug("Cannot send START, client not connected")
+            return
+        cmd = CMD_MC21_START if self.is_mc21 else CMD_START
+        if not self.is_mc21:
+            await self.send_control_request()
+        try:
+            await self.client.write_gatt_char(self.uuids["control"], cmd, response=True)
+            _LOGGER.info("Start command sent")
+        except Exception as e:
+            _LOGGER.debug("Error sending START: %s", e)
 
     async def send_pause(self):
-        if self.is_connected:
-            await self.send_control_request()
-            try:
-                # await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_STOP, response=True)
-                await self.client.write_gatt_char(
-                    self.uuids["control"],
-                    CMD_STOP,
-                    response=True
-                )
-
-            except Exception as e:
-                _LOGGER.debug("Error sending STOP: %s", e)
-        else:
+        """Pause the treadmill. MC21: [0x08] direct. MC11: Request Control + [0x08,0x02]."""
+        if not self.is_connected:
             _LOGGER.debug("Cannot send STOP, client not connected")
+            return
+        cmd = CMD_MC21_STOP if self.is_mc21 else CMD_STOP
+        if not self.is_mc21:
+            await self.send_control_request()
+        try:
+            await self.client.write_gatt_char(self.uuids["control"], cmd, response=True)
+            _LOGGER.info("Pause command sent")
+        except Exception as e:
+            _LOGGER.debug("Error sending STOP: %s", e)
 
     async def send_finish(self):
-        if self.is_connected:
-            await self.send_control_request()
-            try:
-                # await self.client.write_gatt_char(UUID_CONTROL_POINT, CMD_FINISH, response=True)
-                await self.client.write_gatt_char(
-                    self.uuids["control"],
-                    CMD_FINISH,
-                    response=True
-                )
-
-            except Exception as e:
-                _LOGGER.debug("Error sending FINISH: %s", e)
-        else:
+        """Stop the treadmill. MC21: [0x08] direct. MC11: Request Control + [0x08,0x01]."""
+        if not self.is_connected:
             _LOGGER.debug("Cannot send FINISH, client not connected")
+            return
+        cmd = CMD_MC21_STOP if self.is_mc21 else CMD_FINISH
+        if not self.is_mc21:
+            await self.send_control_request()
+        try:
+            await self.client.write_gatt_char(self.uuids["control"], cmd, response=True)
+            _LOGGER.info("Finish command sent")
+        except Exception as e:
+            _LOGGER.debug("Error sending FINISH: %s", e)
 
     async def send_set_speed(self, kmh: float) -> None:
         """Set treadmill belt speed while running.
@@ -273,7 +295,8 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             return
         # Clamp and round to 0.1 resolution
         kmh = round(max(self.speed_min, min(self.speed_max, kmh)), 1)
-        await self.send_control_request()
+        if not self.is_mc21:
+            await self.send_control_request()
         try:
             await self.client.write_gatt_char(
                 self.uuids["control"],
@@ -351,6 +374,7 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
                 status_str = countdown_map.get(data[2], f"mode unknown ({data[2]:02X})")
                 if status_str.startswith("countdown"):
                     countdown_number = int(status_str.split()[1])
+            # ---- MC11 format (b[0]=0x01) ----
             # Playing
             elif data[0] == 0x01 and data[1] == 0x0D:
                 status_str = "playing"
@@ -360,6 +384,21 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
             # Idle
             elif data[0] == 0x01 and data[1] == 0x01:
                 status_str = "idle"
+
+            # ---- MC21 2AD3 format (b[0]=0x00) ----
+            # Quick Start / Manual Mode → treat as playing
+            elif data[0] == 0x00 and data[1] == 0x0D:
+                status_str = "playing"
+            # PostWorkout → treat as stopping/paused
+            elif data[0] == 0x00 and data[1] == 0x0F:
+                status_str = "stopping/paused"
+            # Pre-Workout → treat as idle (ready state)
+            elif data[0] == 0x00 and data[1] == 0x0E:
+                status_str = "idle"
+            # Idle
+            elif data[0] == 0x00 and data[1] == 0x01:
+                status_str = "idle"
+
             else:
                 _LOGGER.debug(
                     "Unrecognised status bytes: %s — treating as unknown. "

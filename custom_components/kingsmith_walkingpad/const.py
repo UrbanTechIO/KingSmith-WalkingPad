@@ -52,11 +52,15 @@ CONF_WATCH_HR_ENTITY = "watch_hr_entity"
 CONF_WATCH_STEPS_ENTITY = "watch_steps_entity"
 CONF_WATCH_CALORIES_ENTITY = "watch_calories_entity"
 
-# Commands
+# Commands — MC11 uses Request Control (0x00) before every command
 CMD_CONTROL_REQUEST = bytes([0x00])
-CMD_START = bytes([0x07, 0x01])
-CMD_STOP = bytes([0x08, 0x02])
-CMD_FINISH = bytes([0x08, 0x01])
+CMD_START  = bytes([0x07, 0x01])   # MC11: Start with parameter
+CMD_STOP   = bytes([0x08, 0x02])   # MC11: Stop with Pause parameter
+CMD_FINISH = bytes([0x08, 0x01])   # MC11: Stop with Stop parameter
+
+# MC21 commands — NO Request Control needed, bare opcodes only
+CMD_MC21_START  = bytes([0x07])    # Confirmed from nRF log 18:36:23
+CMD_MC21_STOP   = bytes([0x08])    # Confirmed from nRF log 18:37:22
 
 # Speed control
 SPEED_MIN = 1.0   # km/h
