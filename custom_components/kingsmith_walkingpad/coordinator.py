@@ -28,6 +28,8 @@ from .const import (
     SPEED_MAX,
     CMD_MC21_START,
     CMD_MC21_STOP,
+    UUID_MC21_AUTH,
+    CMD_MC21_AUTH,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -157,6 +159,10 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
         except Exception as exc:
             _LOGGER.error("Failed to subscribe to notifications: %s", exc)
 
+        # MC21: send proprietary authorization token to unlock 2AD9 control
+        if self.is_mc21:
+            await self.send_mc21_auth()
+
     # async def async_stop(self):
     #     """Disconnect BLE client."""
     #     await self.disconnect()
@@ -223,6 +229,23 @@ class WalkingPadCoordinator(DataUpdateCoordinator):
 
 
     # Control commands (no changes, just cleaned logs)
+    async def send_mc21_auth(self) -> None:
+        """Send the proprietary KingSmith authorization token to unlock 2AD9 control on MC21.
+        Must be called once after connecting, before any Start/Stop/Speed commands.
+        Confirmed from HCI snoop log — static 8-byte token, identical across all sessions.
+        """
+        if not self.is_mc21 or not self.is_connected:
+            return
+        try:
+            await self.client.write_gatt_char(
+                UUID_MC21_AUTH,
+                CMD_MC21_AUTH,
+                response=True,
+            )
+            _LOGGER.info("MC21 authorization token sent successfully")
+        except Exception as exc:
+            _LOGGER.error("Failed to send MC21 authorization token: %s", exc)
+
     async def send_control_request(self):
         """MC11 only — MC21 does not need this before any command."""
         if self.is_mc21:

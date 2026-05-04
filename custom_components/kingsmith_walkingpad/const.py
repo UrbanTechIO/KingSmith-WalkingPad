@@ -62,6 +62,12 @@ CMD_FINISH = bytes([0x08, 0x01])   # MC11: Stop with Stop parameter
 CMD_MC21_START  = bytes([0x07])    # Confirmed from nRF log 18:36:23
 CMD_MC21_STOP   = bytes([0x08])    # Confirmed from nRF log 18:37:22
 
+# MC21 proprietary authorization UUID and token
+# The KS Fit app writes this static token to unlock 2AD9 control after connecting
+# Confirmed from HCI snoop log — identical across 41 sessions
+UUID_MC21_AUTH = "d18d2c10-c44c-11e8-a355-529269fb1459"
+CMD_MC21_AUTH  = bytes([0x01, 0x00, 0x0D, 0x00, 0x06, 0x0B, 0x0F, 0x0D])
+
 # Speed control
 SPEED_MIN = 1.0   # km/h
 SPEED_MAX = 12.0  # km/h
