@@ -2,7 +2,7 @@
 import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import callback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, CONF_WATCH_STEPS_ENTITY, CONF_WATCH_CALORIES_ENTITY
 

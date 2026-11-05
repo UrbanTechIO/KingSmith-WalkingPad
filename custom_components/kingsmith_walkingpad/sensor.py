@@ -1,7 +1,8 @@
 import math
-from homeassistant.components.sensor import SensorEntity, RestoreEntity
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.core import callback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 
 from .const import DOMAIN, CONF_HEIGHT, CONF_WEIGHT_ENTITY, CONF_WATCH_HR_ENTITY
@@ -112,7 +113,7 @@ class WalkingPadBmiSensor(SensorEntity):
         self.async_write_ha_state()
 
     @callback
-    def _handle_weight_update(self, entity_id, old_state, new_state):
+    def _handle_weight_update(self, event):
         self._recalculate_bmi()
         self.async_write_ha_state()
 

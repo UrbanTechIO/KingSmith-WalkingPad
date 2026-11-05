@@ -2,8 +2,6 @@
 import asyncio
 import logging
 from bleak import BleakClient
-from bleak.backends.device import BLEDevice
-from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import async_ble_device_from_address
 try:
     from bleak_retry_connector import establish_connection

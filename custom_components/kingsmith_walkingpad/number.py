@@ -2,7 +2,7 @@
 import logging
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.core import callback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, SPEED_MIN, SPEED_MAX, SPEED_STEP
 
